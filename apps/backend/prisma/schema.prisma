@@ -1,0 +1,310 @@
+// DigitalOcean Media Platform - Database Schema
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// User Management
+// ============================================
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  username      String    @unique
+  passwordHash  String
+  displayName   String?
+  bio           String?   @db.Text
+  avatarUrl     String?
+  coverUrl      String?
+  role          Role      @default(USER)
+  emailVerified Boolean   @default(false)
+  isBanned      Boolean   @default(false)
+  banReason     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  posts         Post[]
+  media         Media[]
+  sessions      Session[]
+  likes         Like[]
+  comments      Comment[]
+  analytics     Analytics[]
+  uploadJobs    UploadJob[]
+
+  @@index([email])
+  @@index([username])
+  @@index([createdAt])
+}
+
+enum Role {
+  USER
+  MODERATOR
+  ADMIN
+}
+
+// ============================================
+// Authentication & Sessions
+// ============================================
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  tokenHash    String   @unique
+  refreshToken String?  @unique
+  userAgent    String?
+  ipAddress    String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+}
+
+// ============================================
+// Posts & Content
+// ============================================
+
+model Post {
+  id          String      @id @default(uuid())
+  userId      String
+  content     String?     @db.Text
+  type        PostType    @default(MIXED)
+  visibility  Visibility  @default(PUBLIC)
+  isPinned    Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  media       PostMedia[]
+  comments    Comment[]
+  likes       Like[]
+  analytics   Analytics[]
+  shares      Share[]
+
+  @@index([userId])
+  @@index([type])
+  @@index([visibility])
+  @@index([createdAt])
+  @@index([isPinned])
+}
+
+enum PostType {
+  TEXT
+  IMAGE
+  VIDEO
+  DOCUMENT
+  MIXED
+}
+
+enum Visibility {
+  PUBLIC
+  UNLISTED
+  PRIVATE
+}
+
+// ============================================
+// Media Management
+// ============================================
+
+model Media {
+  id            String        @id @default(uuid())
+  userId        String
+  originalName  String
+  storageKey    String        @unique
+  mimeType      String
+  fileSize      BigInt
+  duration      Int?          // in seconds (for videos)
+  width         Int?
+  height        Int?
+  status        MediaStatus   @default(PENDING)
+  transcodeStatus TranscodeStatus @default(PENDING)
+  metadata      Json?
+  errorMessage  String?
+  cdnUrl        String?
+  thumbnailUrl  String?
+  hlsPlaylistUrl String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  posts         PostMedia[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([mimeType])
+  @@index([createdAt])
+}
+
+enum MediaStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum TranscodeStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  NOT_REQUIRED
+}
+
+// Junction table for Post-Media relationship
+model PostMedia {
+  id        String   @id @default(uuid())
+  postId    String
+  mediaId   String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  media     Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, mediaId])
+  @@index([postId])
+  @@index([mediaId])
+}
+
+// ============================================
+// Comments
+// ============================================
+
+model Comment {
+  id        String    @id @default(uuid())
+  postId    String
+  userId    String
+  parentId  String?
+  content   String    @db.Text
+  isEdited  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // Relations
+  post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Comment[] @relation("CommentReplies")
+
+  @@index([postId])
+  @@index([userId])
+  @@index([parentId])
+  @@index([createdAt])
+}
+
+// ============================================
+// Engagement
+// ============================================
+
+model Like {
+  id        String   @id @default(uuid())
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([postId])
+  @@index([userId])
+}
+
+model Share {
+  id           String   @id @default(uuid())
+  postId       String
+  userId       String?
+  sharedVia    ShareVia @default(DIRECT)
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  post         Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([postId])
+  @@index([userId])
+}
+
+enum ShareVia {
+  DIRECT
+  SOCIAL
+  LINK
+  EMBED
+}
+
+// ============================================
+// Analytics
+// ============================================
+
+model Analytics {
+  id          String         @id @default(uuid())
+  postId      String?
+  userId      String?
+  eventType   AnalyticsType
+  value       Int            @default(1)
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime       @default(now())
+
+  post        Post?          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user        User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([postId])
+  @@index([userId])
+  @@index([eventType])
+  @@index([createdAt])
+}
+
+enum AnalyticsType {
+  VIEW
+  PLAY
+  DOWNLOAD
+  SHARE
+  LIKE
+  COMMENT
+  UPLOAD
+  TRANSCODE
+}
+
+// ============================================
+// Upload Jobs (for tracking async uploads)
+// ============================================
+
+model UploadJob {
+  id         String      @id @default(uuid())
+  userId     String
+  status     UploadStatus @default(PENDING)
+  progress   Int         @default(0)
+  mediaId    String?
+  errorMessage String?
+  metadata   Json?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  media      Media?      @relation(fields: [mediaId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum UploadStatus {
+  PENDING
+  UPLOADING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
