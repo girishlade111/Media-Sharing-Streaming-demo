@@ -1,246 +1,294 @@
-# Media Sharing Platform — Product Feature Design
+# Media Sharing Platform — UI System Design (No Code)
 
-## 1) User Features
+## Design Direction
+A unified product UI blending:
+- **Twitter**: fast timeline readability, lightweight interaction density, conversation-centric post cards.
+- **Instagram**: immersive media-first browsing, polished image/video presentation, creator identity prominence.
+- **Netflix**: cinematic viewing surfaces, dark mode depth, strong video player and recommendation rails.
 
-### 1.1 Account Creation
-- **Registration methods**
-  - Email + password sign-up.
-  - Optional social sign-in (Google/GitHub) as a future enhancement.
-- **Core fields**
-  - Required: username, email, password.
-  - Optional at sign-up: display name, avatar.
-- **Validation rules**
-  - Username: unique, 3–30 chars, alphanumeric + underscore.
-  - Email: unique + verified before full posting permissions.
-  - Password: minimum 8 chars, complexity requirements.
-- **Security controls**
-  - Email verification token with expiry.
-  - CAPTCHA/rate-limit on repeated sign-up attempts.
-  - Device/session fingerprint logging for risk detection.
-- **Onboarding**
-  - First-login profile completion prompts.
-  - Content preference selection used to seed first feed.
-
-### 1.2 Login
-- **Authentication methods**
-  - Email + password.
-  - Optional OAuth providers.
-- **Session model**
-  - Short-lived access token + refresh token rotation.
-  - Active session list in account settings (device, location, last seen).
-- **Account safety**
-  - Brute-force protection (temporary lockouts after repeated failures).
-  - Optional 2FA (TOTP) for sensitive accounts.
-  - “Forgot password” with signed reset links.
-
-### 1.3 Profile
-- **Public profile elements**
-  - Avatar, cover image, display name, username, bio.
-  - Post count, media count, joined date.
-- **Editable settings**
-  - Profile media, bio, website, location.
-  - Privacy level (public / followers-only / private account).
-  - Notification preferences.
-- **Profile tabs**
-  - Posts (all content types).
-  - Media-only view (images/videos).
-  - Documents shared.
-- **Moderation hooks**
-  - Report profile.
-  - Block/mute users.
-
-### 1.4 Feed
-- **Feed types**
-  - Home timeline (algorithmic + recency blend).
-  - Following timeline (strictly followed accounts, chronological).
-  - User profile feeds (author-scoped).
-- **Ranking signals**
-  - Recency, creator affinity, media engagement history, content type preference.
-- **User controls**
-  - Filter by media type (text/image/video/document).
-  - Mute topics/users.
-  - Hide or report post directly from feed card.
+Design principles:
+1. **Media-first, text-supported**: media gets visual priority; text metadata remains clear.
+2. **Low-friction authoring**: post creation and upload are one continuous flow.
+3. **Predictable interaction patterns**: feed, viewers, and profile share consistent controls.
+4. **Responsive by default**: mobile-first with progressively richer desktop experiences.
 
 ---
 
-## 2) Post System
+## 1) Component Architecture
 
-### 2.1 Supported Post Types
-- **Text post**
-  - Body text, hashtags, mentions, optional links.
-- **Image post**
-  - Single or multi-image carousel.
-  - Optional caption and alt text.
-- **Video post**
-  - Upload video + auto-generated thumbnail.
-  - Optional caption and chapter/timestamp metadata (future).
-- **Document post**
-  - PDF/doc/xlsx/ppt/txt and similar allowed formats.
-  - Optional description and downloadable attachment card.
+### 1.1 Global Shell Components
+- **AppShell**
+  - Header (brand, search, notifications, profile quick menu)
+  - Left Nav Rail (Home, Create, Upload, Profile, Saved)
+  - Main Content Area
+  - Optional Right Rail (trending tags, recommendations)
+- **Top Bar / Mobile Tab Bar**
+  - Mobile: bottom tab navigation with central “Create” action.
+  - Desktop: top utility row + side navigation.
+- **Theming System**
+  - Dark-first theme with optional light mode.
+  - Tokenized typography, spacing, radii, elevation, and motion timings.
 
-### 2.2 Post Composition Flow
-1. User opens composer and selects content type.
-2. Client requests upload intent from API (file metadata, type, size).
-3. API validates policy, returns presigned upload URL(s).
-4. Client uploads directly to Spaces.
-5. Client submits final post payload referencing uploaded object key(s).
-6. Feed renders post in pending/processing state if needed.
+### 1.2 Feed & Post Components
+- **FeedContainer** (infinite list + virtualization hooks)
+- **PostCard** (base card with type-specific body)
+  - PostHeader (avatar, name, username, timestamp, overflow menu)
+  - PostBody (text + media content renderer)
+  - PostActions (like, comment, share, save, more)
+  - PostMeta (view count, file size/type, processing status)
+- **MediaRenderer**
+  - TextBlock
+  - ImageGrid / Carousel
+  - EmbeddedVideoTile
+  - DocumentTile
 
-### 2.3 Post State Lifecycle
-- `draft` → `uploading` → `processing` (for video/doc preview) → `published`.
-- Failure states:
-  - `upload_failed` (retry upload)
-  - `processing_failed` (reprocess request)
-  - `blocked` (policy/moderation violation)
+### 1.3 Viewer Components
+- **LightboxViewer** (image)
+- **VideoPlayerSurface** (cinematic playback)
+- **DocumentPreviewPane** (inline preview + file actions)
 
----
-
-## 3) Media Handling Features
-
-### 3.1 Upload Media
-- Direct-to-Spaces upload for reduced backend bandwidth.
-- Multipart upload for large files.
-- Upload progress, retry, and resumable behavior.
-- Server-side media validation by MIME + extension + size.
-- Virus scanning hook for documents before publish.
-
-### 3.2 Preview Media
-- **Image**: responsive thumbnails + full-size modal preview.
-- **Video**: poster thumbnail + inline player.
-- **Document**: document card with metadata and optional first-page preview.
-
-### 3.3 Streaming Video
-- Streams from DigitalOcean Spaces object URLs or CDN URLs.
-- Supports HTTP Range requests for seek/playback continuity.
-- Adaptive bitrate (if HLS renditions available) with manifest delivery.
-
-### 3.4 Download Documents
-- Download button on post/document page.
-- Access governed by post visibility policy.
-- Optional signed download URL for private/restricted files.
+### 1.4 Creation & Upload Components
+- **PostComposer** (text + attachments + audience controls)
+- **MediaDropzone** (drag/drop + click-to-upload)
+- **UploadQueuePanel** (progress, retry, pause, reorder)
+- **PrePublishChecklist** (validation, accessibility, privacy)
 
 ---
 
-## 4) Feed Behavior
+## 2) Main UI Pages
 
-### 4.1 Timeline Feed
-- Cursor-based pagination (not offset-based) for stable scrolling.
-- Mixed media cards normalized to a common post schema.
-- Deduplication across refreshes and background updates.
+### 2.1 Home Feed
+### Layout
+- **Desktop (3-column)**
+  - Left: nav rail + quick create.
+  - Center: timeline feed.
+  - Right: suggestions, trending, “continue watching”.
+- **Tablet (2-column)**
+  - Collapsed left nav, center feed, optional right contextual drawer.
+- **Mobile (single column)**
+  - Sticky top bar, feed stream, bottom tabs.
 
-### 4.2 Media Preview Behavior
-- Image and video thumbnails load first; full content deferred.
-- Video does not autoplay by default on low bandwidth.
-- Document previews show icon + first-page snapshot where available.
+### Interaction Flow
+1. User lands on timeline with mixed post types.
+2. Scroll triggers progressive loading (infinite feed).
+3. Tap media opens relevant viewer (lightbox/player/document).
+4. Back returns to feed at preserved scroll position.
 
-### 4.3 Lazy Loading
-- Infinite scroll with intersection observers.
-- Prefetch next page when user reaches threshold.
-- Delay loading heavy assets (full-res images/video segments) until in-viewport.
-
----
-
-## 5) Upload Limits
-
-### 5.1 Per-file Limits
-- Text-only post: up to **10,000 characters**.
-- Image: up to **20 MB per file**, max **10 images/post**.
-- Video: up to **2 GB per file** (MVP) and configurable per plan.
-- Document: up to **100 MB per file**.
-
-### 5.2 Throughput and Quotas
-- Per-user daily upload quota (e.g., 5 GB/day default).
-- Burst upload rate limits to prevent abuse.
-- Tenant-level limits (if multi-tenant version introduced).
-
-### 5.3 Type and Security Restrictions
-- Allowed MIME whitelist by category.
-- Block executable/script formats for document uploads.
-- Filename normalization + server-generated object keys.
+### Feed UI behavior
+- **Infinite scrolling**
+  - Cursor-based loading.
+  - Skeleton cards during fetch.
+  - “Back to top” floating action after deep scroll.
+- **Media cards**
+  - Uniform card framing with type badge (Image, Video, Doc).
+  - Smart-height cards to reduce layout shift.
+  - In-view prioritization for preview loading.
 
 ---
 
-## 6) Streaming Behavior (DigitalOcean Spaces)
+### 2.2 Post Creation Page
+### Layout
+- Primary composer panel centered.
+- Right-side preview panel on desktop (live post preview).
+- Bottom sticky action bar on mobile (Attach, Audience, Publish).
 
-### 6.1 Presigned URL Streaming (Private Media)
-- **When used**: private accounts, followers-only posts, expiring access needs.
-- **Flow**:
-  1. Client requests playback URL for media ID.
-  2. API checks auth + authorization (viewer can access post).
-  3. API generates short-lived presigned URL (e.g., 1–5 minutes).
-  4. Player streams video directly from Spaces with Range requests.
-  5. Client refreshes tokenized URL before expiry for long sessions.
-- **Pros**
-  - Fine-grained access control.
-  - Time-limited links reduce leakage impact.
-- **Trade-offs**
-  - Extra API hop and URL refresh logic.
-  - Less CDN cache efficiency if URLs are highly unique.
+### Interaction Flow
+1. Start with text (optional).
+2. Add one or multiple media assets.
+3. Configure visibility + metadata (caption, alt text, tags).
+4. Validate and publish.
 
-### 6.2 Public CDN URL Streaming (Public Media)
-- **When used**: publicly visible posts optimized for scale.
-- **Flow**:
-  1. API returns canonical CDN path for video/manifest.
-  2. Player fetches content from CDN edge nearest user.
-  3. Cache hits reduce origin (Spaces) load and playback latency.
-- **Pros**
-  - Best performance and global delivery.
-  - Excellent cacheability for hot media.
-- **Trade-offs**
-  - Not suitable for private assets without extra token gating.
-
-### 6.3 Strategy Recommendation
-- Use **presigned URLs** for private or restricted content.
-- Use **public CDN URLs** for globally visible content.
-- Hybrid: signed manifest URL + cached segment URLs where policy allows.
+### UX Details
+- Draft auto-save indicator.
+- Character/file count indicators.
+- Publish button state: disabled until requirements met.
 
 ---
 
-## 7) Content Rendering Logic
+### 2.3 Media Viewer (Unified Entry)
+### Purpose
+Single routed viewer shell that loads the correct specialized viewer for image/video/document while preserving context and quick navigation between post media.
 
-### 7.1 Post Card Renderer Rules
-- Render by `post.type`:
-  - `text`: text component + link unfurl.
-  - `image`: grid/carousel component + zoom viewer.
-  - `video`: player component with poster and quality controls.
-  - `document`: file card with type icon, size, and download action.
-
-### 7.2 Fallback/Failure Handling
-- If media missing/processing: show placeholder + status badge.
-- If forbidden: show “content unavailable” state.
-- If corrupted/unsupported codec: show retry/download fallback.
-
-### 7.3 Device-aware Rendering
-- Mobile-first media sizing.
-- Progressive enhancement for desktop (higher preview resolution).
-- Bandwidth-aware behavior (reduced autoplay, lower-quality initial streams).
+### Layout
+- Fullscreen overlay on desktop; full-page modal route on mobile.
+- Left/right navigation for multi-media posts.
+- Metadata drawer toggle (creator, caption, tags, actions).
 
 ---
 
-## 8) Media Caching Design
+### 2.4 Video Player Page
+### Layout
+- Large cinematic player area (16:9 default, adaptive for source ratio).
+- Under-player metadata (title, creator, description, publish time).
+- Side rail for related videos/media.
 
-### 8.1 CDN Caching
-- Public assets served with long `Cache-Control` max-age and immutable keys.
-- Versioned object keys for safe cache busting after edits/replacements.
+### Player Controls
+- Play/pause, seek bar, volume, fullscreen, playback speed, quality selector.
+- Subtitle toggle (future-ready).
+- Network/quality status chip.
 
-### 8.2 Application/API Caching
-- Feed page responses cached in Redis per user cursor window (short TTL).
-- Media metadata (dimensions, duration, mime, thumbnail URLs) cached to reduce DB reads.
-
-### 8.3 Client-side Caching
-- Browser cache for thumbnails and static media URLs.
-- Service worker (optional) for recent feed media in low-connectivity environments.
-
-### 8.4 Invalidation Rules
-- New post: fan-out invalidation for relevant feed keys.
-- Post edit/delete: invalidate post detail + impacted timeline windows.
-- Privacy change: aggressively invalidate previously public URLs/keys.
+### Interaction Flow
+1. Poster preview displayed first.
+2. User taps play, stream starts from DigitalOcean Spaces/CDN.
+3. Scrubbing requests ranged segments; quality adapts if enabled.
+4. Completion triggers “next recommended media.”
 
 ---
 
-## 9) End-to-End Feature Summary
-- Users can register, authenticate securely, manage rich profiles, and browse personalized or chronological feeds.
-- Posting supports text, images, videos, and documents with type-specific rendering and moderation controls.
-- Media uploads are direct-to-Spaces with presigned URLs and processing-aware publishing.
-- Video streaming is delivered directly from Spaces/CDN with a policy-driven choice between presigned and public URLs.
-- Feed and media performance is handled through lazy loading, cursor pagination, and layered caching (CDN + Redis + browser).
+### 2.5 Document Viewer
+### Layout
+- Split view:
+  - Left: scrollable document preview area.
+  - Right: metadata + actions.
+- Mobile: stacked sections (preview first, actions below).
+
+### Interaction Flow
+1. User opens document from feed/post.
+2. Inline preview loads first page(s).
+3. User can zoom, navigate pages, or download original.
+
+### Required Controls
+- Download button (primary action).
+- Page navigation.
+- File info (type, size, upload date).
+
+---
+
+### 2.6 User Profile
+### Layout
+- Profile header: avatar, cover, name, username, bio, follow/action button.
+- Stats row: posts, followers, following, media count.
+- Tabbed content area:
+  - Posts
+  - Media
+  - Videos
+  - Documents
+  - Saved (self only)
+
+### Interaction Flow
+1. User lands on profile header.
+2. Switches tabs for content filtering by media type.
+3. Opens specific post/media using the same viewer system.
+
+---
+
+### 2.7 Media Upload Page
+### Layout
+- Dedicated upload workspace:
+  - Large drag-and-drop zone.
+  - Queue table/list with per-file status.
+  - Side panel for batch metadata settings.
+
+### Drag & Drop Upload UX
+- Dropzone states: idle, drag-over, validating, uploading, complete, error.
+- Supports multi-file selection and folder-style batch flows (where available).
+- Error chips per item (type mismatch, oversize, failed upload).
+
+### Interaction Flow
+1. Drag/drop files into dropzone.
+2. Files validate instantly with inline feedback.
+3. Upload queue starts with visible progress bars.
+4. Completed uploads are attached to draft post or saved to library.
+
+---
+
+## 3) Post Card Design (All Media Types)
+
+### Card Structure
+1. **Header**: avatar, author, time, audience/privacy indicator.
+2. **Body**:
+   - Text block (collapsed/expandable).
+   - Media block (one of image/video/document).
+3. **Footer**:
+   - Primary actions (like/comment/share/save).
+   - Secondary actions (report/hide/copy link).
+
+### Type-specific body behavior
+- **Text**
+  - Emphasized typography and link unfurl cards.
+- **Image**
+  - Single image: edge-to-edge crop-safe preview.
+  - Multiple images: grid/collage with “+N” overlay when overflow.
+- **Video**
+  - Poster thumbnail with play CTA and duration chip.
+  - Optional silent hover preview on desktop only.
+- **Document**
+  - Document icon + filename + summary metadata.
+  - Inline preview thumbnail and clear download CTA.
+
+---
+
+## 4) Media Display Patterns
+
+### 4.1 Images — Lightbox Preview
+- Tap image to open lightbox.
+- Supports zoom, pan, swipe/arrow navigation.
+- Background dim + focus lock.
+- Caption and alt text visible in side/bottom panel.
+
+### 4.2 Videos — Embedded Streaming Player
+- Embedded player inside post card for quick consumption.
+- Expands to dedicated video page for immersive viewing.
+- Progressive loading: poster -> initial buffer -> playback.
+
+### 4.3 Documents — Preview + Download
+- Inline first-page preview thumbnail in card.
+- Open document viewer for deeper preview.
+- Download button always visible and clearly labeled.
+
+---
+
+## 5) Interaction Model
+
+### 5.1 Feed-to-Viewer Continuity
+- Opening media preserves timeline position.
+- Closing viewer restores user to exact scroll location.
+- Optional picture-in-picture mini player while browsing (video).
+
+### 5.2 Motion & Feedback
+- Subtle card hover/press transitions.
+- Loading states: skeletons, shimmer, and buffered progress indicators.
+- Toast feedback for upload complete/error, save, copy link.
+
+### 5.3 Accessibility-first UX
+- Keyboard navigation for all major controls.
+- Focus-visible states across components.
+- Alt text prompts for images before publish.
+- Sufficient contrast in dark and light themes.
+
+---
+
+## 6) Responsive Design Strategy
+
+### 6.1 Breakpoint Strategy
+- **Mobile (≤768px)**
+  - Single-column feed.
+  - Bottom tab navigation.
+  - Fullscreen media viewers.
+- **Tablet (769–1024px)**
+  - Two-column adaptive layout.
+  - Condensed rails and collapsible metadata panels.
+- **Desktop (>1024px)**
+  - Three-column layout with persistent context rails.
+  - Rich hover interactions and side-by-side preview panels.
+
+### 6.2 Adaptive Media Behavior
+- Serve smaller thumbnails on mobile, higher resolution on desktop.
+- Prefer tap-based interactions on touch devices.
+- Minimize autoplay and heavy preload on constrained connections.
+
+### 6.3 Performance UX
+- Lazy load off-screen media.
+- Prioritize above-the-fold content and first visible cards.
+- Avoid layout shifts via fixed media placeholders/aspect-ratio boxes.
+
+---
+
+## 7) End-to-End UI Flow Summary
+1. User enters **Home Feed** and browses infinite media cards.
+2. User opens media in context-specific viewers (image lightbox, video player, doc viewer).
+3. User creates content via **Post Creation** or **Upload Page** with drag-drop flow.
+4. User publishes and immediately sees the post rendered in feed/profile.
+5. Profile and media pages reuse the same card/viewer patterns for consistency.
+
+This UI system ensures social-feed familiarity (Twitter), visual storytelling quality (Instagram), and premium media viewing (Netflix), while remaining responsive, performant, and scalable.
