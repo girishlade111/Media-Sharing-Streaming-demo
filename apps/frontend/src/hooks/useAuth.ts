@@ -2,35 +2,27 @@
 
 import { useAuthStore } from '@/stores/authStore';
 import { authApi } from '@/lib/api';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
 export function useAuth() {
   const { user, isAuthenticated, setAuth, clearAuth } = useAuthStore();
-  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+    const token = localStorage.getItem('accessToken');
     if (token && !user) {
       authApi.getMe()
-        .then(() => {
-          setIsLoading(false);
+        .then((userData) => {
+          // Token is valid, user data loaded
         })
         .catch(() => {
           clearAuth();
-          setIsLoading(false);
         });
-    } else {
-      setIsLoading(false);
     }
-  }, [user, clearAuth]);
-
-  const loading = typeof window !== 'undefined' 
-    ? (!user && !!localStorage.getItem('accessToken')) 
-    : false;
+  }, []);
 
   return {
     user,
     isAuthenticated,
-    isLoading: loading || isLoading,
+    isLoading: !user && !!localStorage.getItem('accessToken'),
   };
 }

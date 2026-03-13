@@ -6,17 +6,15 @@ import { PostCard } from '@/components/PostCard';
 import { usePosts } from '@/hooks/queries';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type { Post } from '@/types';
 
 export default function FeedPage() {
   const [page, setPage] = useState(1);
-  const { data, isLoading } = usePosts({
+  const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = usePosts({
     page,
     limit: 10,
   });
 
-  const posts = data?.data || [];
-  const pagination = data?.pagination;
+  const posts = data?.posts || [];
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -40,28 +38,19 @@ export default function FeedPage() {
             </div>
           ) : (
             <>
-              {posts.map((post: Post) => (
+              {posts.map((post: any) => (
                 <PostCard key={post.id} post={post} />
               ))}
 
-              {pagination && pagination.page < pagination.totalPages && (
-                <div className="flex justify-center pt-4 gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                  >
-                    Previous
-                  </Button>
-                  <span className="flex items-center px-4 text-sm text-muted-foreground">
-                    Page {pagination.page} of {pagination.totalPages}
-                  </span>
+              {data?.pagination && data.pagination.page < data.pagination.totalPages && (
+                <div className="flex justify-center pt-4">
                   <Button
                     variant="outline"
                     onClick={() => setPage((p) => p + 1)}
-                    disabled={pagination.page >= pagination.totalPages}
+                    disabled={isFetchingNextPage}
                   >
-                    Next
+                    {isFetchingNextPage && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Load More
                   </Button>
                 </div>
               )}

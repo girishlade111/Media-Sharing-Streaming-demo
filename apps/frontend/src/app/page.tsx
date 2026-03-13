@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
-  Image as ImageIcon,
+  Image,
   Video,
   FileText,
   Upload,
@@ -38,6 +38,7 @@ import {
   Download,
   File,
   Film,
+  ImageIcon,
   Presentation,
   Table,
   FileSpreadsheet,
@@ -66,7 +67,7 @@ export default function Home() {
 
   const features = [
     {
-      icon: ImageIcon,
+      icon: Image,
       title: 'Photo Sharing',
       description: 'Share your photos in stunning quality. Support for JPG, PNG, GIF, and WEBP formats with automatic optimization and CDN delivery.',
       color: 'bg-blue-500/10 text-blue-500',
@@ -294,7 +295,7 @@ export default function Home() {
             <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
               <div className="text-center space-y-4 p-6 rounded-xl bg-background border">
                 <div className="h-14 w-14 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center mx-auto">
-                  <ImageIcon className="h-7 w-7" />
+                  <Image className="h-7 w-7" />
                 </div>
                 <h3 className="text-xl font-semibold">Images</h3>
                 <div className="flex flex-wrap justify-center gap-2">
@@ -850,15 +851,15 @@ export default function Home() {
                   <div className="space-y-2 text-muted-foreground">
                     <div><span className="text-purple-400">POST</span> /uploads/presigned</div>
                     <div className="text-green-400">{'{'} </div>
-                    <div className="pl-4">&quot;filename&quot;: &quot;video.mp4&quot;,</div>
-                    <div className="pl-4">&quot;contentType&quot;: &quot;video/mp4&quot;,</div>
-                    <div className="pl-4">&quot;size&quot;: 524288000</div>
+                    <div className="pl-4">"filename": "video.mp4",</div>
+                    <div className="pl-4">"contentType": "video/mp4",</div>
+                    <div className="pl-4">"size": 524288000</div>
                     <div className="text-green-400">{'}'}</div>
-                    <div className="mt-4 text-blue-400">{'// Response'}</div>
+                    <div className="mt-4 text-blue-400">// Response</div>
                     <div className="text-green-400">{'{'}</div>
-                    <div className="pl-4">&quot;uploadUrl&quot;: &quot;https://...&quot;,</div>
-                    <div className="pl-4">&quot;mediaId&quot;: &quot;uuid&quot;,</div>
-                    <div className="pl-4">&quot;expiresIn&quot;: 3600</div>
+                    <div className="pl-4">"uploadUrl": "https://...",</div>
+                    <div className="pl-4">"mediaId": "uuid",</div>
+                    <div className="pl-4">"expiresIn": 3600</div>
                     <div className="text-green-400">{'}'}</div>
                   </div>
                 </div>
@@ -1342,7 +1343,7 @@ export default function Home() {
                           <Star key={star} className="h-5 w-5 fill-yellow-400 text-yellow-400" />
                         ))}
                       </div>
-                      <p className="text-muted-foreground leading-relaxed">&quot;{testimonial.quote}&quot;</p>
+                      <p className="text-muted-foreground leading-relaxed">"{testimonial.quote}"</p>
                       <div className="flex items-center gap-3 pt-4">
                         <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center font-semibold">
                           {testimonial.avatar}
