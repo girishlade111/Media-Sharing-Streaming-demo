@@ -5,14 +5,12 @@ import { Header } from '@/components/Header';
 import { PostCard } from '@/components/PostCard';
 import { usePosts } from '@/hooks/queries';
 import { Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 
 export default function VideosPage() {
   const [page, setPage] = useState(1);
   const { data, isLoading } = usePosts({ page, limit: 10, type: 'VIDEO' });
 
-  const posts = data?.data || [];
-  const pagination = data?.pagination;
+  const posts = data?.posts || [];
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -30,34 +28,11 @@ export default function VideosPage() {
               <p className="text-muted-foreground">No videos yet</p>
             </div>
           ) : (
-            <>
-              <div className="space-y-6">
-                {posts.map((post: unknown) => (
-                  <PostCard key={(post as { id: string }).id} post={post as never} />
-                ))}
-              </div>
-              {pagination && pagination.page < pagination.totalPages && (
-                <div className="flex justify-center pt-4 gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                  >
-                    Previous
-                  </Button>
-                  <span className="flex items-center px-4 text-sm text-muted-foreground">
-                    Page {pagination.page} of {pagination.totalPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    onClick={() => setPage((p) => p + 1)}
-                    disabled={pagination.page >= pagination.totalPages}
-                  >
-                    Next
-                  </Button>
-                </div>
-              )}
-            </>
+            <div className="space-y-6">
+              {posts.map((post: any) => (
+                <PostCard key={post.id} post={post} />
+              ))}
+            </div>
           )}
         </div>
       </main>

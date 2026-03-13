@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Header } from '@/components/Header';
 import { useAuthStore } from '@/stores/authStore';
 import { authApi } from '@/lib/api';
@@ -15,35 +15,14 @@ import { useRouter } from 'next/navigation';
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, updateUser, isAuthenticated } = useAuthStore();
+  const { user, updateUser } = useAuthStore();
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isClient, setIsClient] = useState(false);
-
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  useEffect(() => {
-    if (isClient && !isAuthenticated) {
-      router.push('/login');
-    }
-  }, [isClient, isAuthenticated, router]);
-
   const [formData, setFormData] = useState({
     displayName: user?.displayName || '',
     bio: user?.bio || '',
   });
-
-  useEffect(() => {
-    if (user) {
-      setFormData({
-        displayName: user.displayName || '',
-        bio: user.bio || '',
-      });
-    }
-  }, [user]);
 
   const handleSave = async () => {
     setIsLoading(true);
@@ -66,19 +45,9 @@ export default function ProfilePage() {
     }
   };
 
-  if (!isClient || !user) {
-    return (
-      <div className="min-h-screen flex flex-col">
-        <Header />
-        <main className="flex-1 container py-8">
-          <div className="max-w-2xl mx-auto">
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          </div>
-        </main>
-      </div>
-    );
+  if (!user) {
+    router.push('/login');
+    return null;
   }
 
   return (

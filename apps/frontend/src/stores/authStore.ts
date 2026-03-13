@@ -32,10 +32,8 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
 
       setAuth: (user, accessToken, refreshToken) => {
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('accessToken', accessToken);
-          localStorage.setItem('refreshToken', refreshToken);
-        }
+        localStorage.setItem('accessToken', accessToken);
+        localStorage.setItem('refreshToken', refreshToken);
         set({
           user,
           accessToken,
@@ -45,10 +43,8 @@ export const useAuthStore = create<AuthState>()(
       },
 
       clearAuth: () => {
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
-        }
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
         set({
           user: null,
           accessToken: null,
@@ -73,6 +69,7 @@ export const useAuthStore = create<AuthState>()(
   )
 );
 
+// Helper to get tokens for API calls
 export const getAuthToken = () => {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('accessToken');
