@@ -155,7 +155,8 @@ export function PostCard({ post, onComment }: PostCardProps) {
               size="sm"
               variant="outline"
               className="ml-auto"
-              onClick={() => window.open(document.cdnUrl, '_blank')}
+              onClick={() => document.cdnUrl && window.open(document.cdnUrl, '_blank')}
+              disabled={!document.cdnUrl}
             >
               View
             </Button>

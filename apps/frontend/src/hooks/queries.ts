@@ -1,10 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { postsApi, mediaApi } from '@/lib/api';
+import type { PaginatedResponse, Post, Media } from '@/types';
 
 export function usePosts(params?: { page?: number; limit?: number; type?: string; userId?: string }) {
-  return useQuery({
+  return useQuery<{ data: Post[]; pagination: { page: number; limit: number; totalPages: number; totalItems: number } }>({
     queryKey: ['posts', params],
-    queryFn: () => postsApi.list(params),
+    queryFn: () => postsApi.list(params) as Promise<{ data: Post[]; pagination: { page: number; limit: number; totalPages: number; totalItems: number } }>,
   });
 }
 
@@ -65,9 +66,9 @@ export function useComment() {
 }
 
 export function useMedia(params?: { page?: number; limit?: number; type?: 'image' | 'video' | 'document' }) {
-  return useQuery({
+  return useQuery<{ data: Media[]; pagination: { page: number; limit: number; totalPages: number; totalItems: number } }>({
     queryKey: ['media', params],
-    queryFn: () => mediaApi.list(params),
+    queryFn: () => mediaApi.list(params) as Promise<{ data: Media[]; pagination: { page: number; limit: number; totalPages: number; totalItems: number } }>,
   });
 }
 

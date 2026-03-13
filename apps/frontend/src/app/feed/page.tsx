@@ -6,15 +6,17 @@ import { PostCard } from '@/components/PostCard';
 import { usePosts } from '@/hooks/queries';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import type { Post } from '@/types';
 
 export default function FeedPage() {
   const [page, setPage] = useState(1);
-  const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = usePosts({
+  const { data, isLoading } = usePosts({
     page,
     limit: 10,
   });
 
-  const posts = data?.posts || [];
+  const posts = data?.data || [];
+  const pagination = data?.pagination;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -38,19 +40,28 @@ export default function FeedPage() {
             </div>
           ) : (
             <>
-              {posts.map((post: any) => (
+              {posts.map((post: Post) => (
                 <PostCard key={post.id} post={post} />
               ))}
 
-              {data?.pagination && data.pagination.page < data.pagination.totalPages && (
-                <div className="flex justify-center pt-4">
+              {pagination && pagination.page < pagination.totalPages && (
+                <div className="flex justify-center pt-4 gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                  >
+                    Previous
+                  </Button>
+                  <span className="flex items-center px-4 text-sm text-muted-foreground">
+                    Page {pagination.page} of {pagination.totalPages}
+                  </span>
                   <Button
                     variant="outline"
                     onClick={() => setPage((p) => p + 1)}
-                    disabled={isFetchingNextPage}
+                    disabled={pagination.page >= pagination.totalPages}
                   >
-                    {isFetchingNextPage && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Load More
+                    Next
                   </Button>
                 </div>
               )}
