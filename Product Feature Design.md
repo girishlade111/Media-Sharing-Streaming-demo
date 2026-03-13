@@ -1,338 +1,274 @@
-# Media Sharing Platform — Backend API Design (No Code)
+# DigitalOcean Spaces Integration Design (S3-Compatible) — Media Platform Backend
 
-## 1) Backend Responsibilities
+## 1) Overview
+This design explains how the backend integrates with **DigitalOcean Spaces** using the **S3-compatible API** for uploads, retrieval, and streaming delivery.
 
-### 1.1 User Management
-- Register and authenticate users.
-- Manage sessions/tokens and enforce authorization for protected resources.
-- Expose user identity and profile basics needed by feed/post APIs.
-
-### 1.2 Post Management
-- Create and retrieve posts containing text and optional attached media.
-- Serve timeline feeds and post detail data.
-- Handle engagement primitives (likes/comments counters and joins).
-
-### 1.3 Media Upload & Retrieval
-- Generate secure, short-lived presigned upload URLs for DigitalOcean Spaces.
-- Store and validate media metadata after direct client upload.
-- Serve media access URLs (public CDN or signed/private) through retrieval APIs.
-
-### 1.4 Platform Integrity
-- Enforce upload limits and file-type policy.
-- Validate ownership links between user, post, and media objects.
-- Provide auditable metadata for moderation, abuse response, and lifecycle tracking.
+Primary goals:
+- Offload large file transfer from backend to object storage.
+- Keep backend as control-plane (auth, policy, metadata, presigned URLs).
+- Use CDN delivery for low-latency global playback.
 
 ---
 
-## 2) API Endpoint Design
+## 2) Create API Keys (Spaces Access Credentials)
 
-Base path suggestion: `/api/v1`
+## 2.1 Create a Spaces Access Key Pair
+1. In DigitalOcean dashboard, open **API** settings.
+2. Create a **Spaces access key** (Access Key + Secret Key).
+3. Restrict key usage by environment (dev/staging/prod) and store separately.
+4. Rotate keys periodically and on suspected compromise.
 
-## 2.1 `POST /upload`
-### Purpose
-Initialize media upload and return presigned URL data.
+## 2.2 Key Management Best Practices
+- Never hardcode keys in source code.
+- Store credentials in secrets manager or environment variables.
+- Use separate keys per service/environment for blast-radius isolation.
+- Log key usage patterns and alert on anomalies.
 
-### Request (conceptual)
-- Auth token (required).
-- Payload:
-  - `filename`
-  - `mimeType`
-  - `sizeBytes`
-  - `mediaType` (`image|video|document`)
-  - `checksum` (optional but recommended)
-
-### Backend logic
-1. Authenticate user.
-2. Validate quota + file size/type policy.
-3. Create pending `media_files` row with status `initiated`.
-4. Generate object key (`uploads/users/{userId}/...`).
-5. Generate presigned PUT URL to DigitalOcean Spaces.
-6. Return upload contract (URL + headers + mediaId + expiration).
-
-### Response (conceptual)
-- `mediaId`
-- `objectKey`
-- `uploadUrl` (presigned)
-- `requiredHeaders`
-- `expiresAt`
-- `maxAllowedSize`
+## 2.3 Required Backend Secrets
+- `SPACES_ACCESS_KEY_ID`
+- `SPACES_SECRET_ACCESS_KEY`
+- `SPACES_REGION` (e.g., `nyc3`)
+- `SPACES_BUCKET`
+- `SPACES_ENDPOINT` (e.g., `https://nyc3.digitaloceanspaces.com`)
+- `SPACES_CDN_BASE_URL` (if CDN enabled, e.g., `https://cdn.example.com`)
 
 ---
 
-## 2.2 `POST /create-post`
-### Purpose
-Create post record and attach one or more uploaded media items.
+## 3) Configure Spaces Endpoint (S3-Compatible)
 
-### Request
-- Auth token (required).
-- Payload:
-  - `text` (optional for media-only posts)
-  - `mediaIds[]` (optional for text-only posts)
-  - `visibility` (`public|followers|private`)
+## 3.1 Endpoint and Region
+DigitalOcean Spaces supports S3-compatible calls against region endpoints, such as:
+- `https://nyc3.digitaloceanspaces.com`
+- `https://sgp1.digitaloceanspaces.com`
 
-### Backend logic
-1. Authenticate user.
-2. Validate post constraints (text length, max media count).
-3. For each `mediaId`:
-   - Verify media exists.
-   - Verify `owner_user_id == auth_user_id`.
-   - Verify status is upload-complete/ready.
-4. Create `posts` row.
-5. Link media to post (set `post_id` or via mapping table if needed).
-6. Return created post snapshot.
+Backend object client must be configured with:
+- S3-compatible signature support (SigV4)
+- Region and endpoint override
+- Path/key naming strategy that matches media domain model
 
-### Response
-- `postId`
-- post payload (author, text, media manifests, timestamps)
+## 3.2 Bucket Setup
+- Create one bucket per environment or per trust boundary.
+- Recommended: `media-prod`, `media-staging`, `media-dev`.
+- Enable versioning if rollback/recovery is needed.
+- Configure CORS to allow trusted frontend origins for direct browser uploads.
 
----
-
-## 2.3 `GET /feed`
-### Purpose
-Return timeline feed with post cards and lightweight media descriptors.
-
-### Query params
-- `cursor` (pagination token)
-- `limit` (e.g., default 20, max 50)
-- `type` (optional filter: `all|text|image|video|document`)
-
-### Backend logic
-1. Authenticate (if personalized feed) or allow public mode for unauthenticated.
-2. Fetch posts ordered by ranking policy (or chronology for MVP).
-3. Join author + media metadata + engagement aggregates.
-4. For each media item, return retrieval strategy:
-   - public CDN URL OR
-   - signed URL reference endpoint if private.
-5. Return next cursor.
-
-### Response
-- `items[]` (post cards)
-- `nextCursor`
-- `hasMore`
+## 3.3 CORS Rules (Direct Upload Support)
+Allow:
+- Methods: `PUT`, `GET`, `HEAD`
+- Headers: `Content-Type`, `Content-MD5`, auth-related signed headers
+- Origins: your frontend domains only
+- Exposed headers: `ETag`
 
 ---
 
-## 2.4 `GET /post/:id`
-### Purpose
-Return full detail for a single post.
+## 4) Generate Presigned Upload URLs
 
-### Backend logic
-1. Resolve post by ID.
-2. Authorize visibility relative to requester.
-3. Return full text, media list, author info, counts, timestamps.
-4. Return comments preview and whether requester liked/saved.
+## 4.1 Backend Flow
+1. Client sends upload intent (`filename`, `mimeType`, `size`, `mediaType`).
+2. Backend authenticates user and validates policy (type, size, quota).
+3. Backend generates object key and signs a short-lived PUT URL.
+4. Backend returns `uploadUrl`, required headers, `objectKey`, expiry, `mediaId`.
+5. Client uploads file directly to Spaces using URL.
+6. Backend verifies completion and marks media metadata as `ready`.
 
-### Response
-- `post`
-- `media[]`
-- `engagement`
-- `viewerState`
+## 4.2 Signing Rules
+- Expiration: short TTL (typically 5–15 minutes).
+- Restrict to single method (`PUT`).
+- Bind expected `Content-Type`.
+- Optionally bind `Content-MD5`/checksum for integrity checks.
 
----
-
-## 2.5 `GET /media/:id`
-### Purpose
-Provide secure retrieval contract for a media asset.
-
-### Backend logic
-1. Authenticate (required for protected media; optional for public).
-2. Resolve media metadata and associated post visibility.
-3. Authorize access.
-4. Return one of:
-   - public CDN URL (long-lived), or
-   - short-lived presigned GET URL (private), or
-   - stream manifest URL for video.
-
-### Response
-- `mediaId`
-- `mediaType`
-- `deliveryMode` (`cdn_public|signed_private`)
-- `url`
-- `expiresAt` (if signed)
-- `contentType`, `sizeBytes`, `checksum`
+## 4.3 Large File Strategy
+- Small files: single PUT presigned upload.
+- Large files: multipart presigned upload with part-size policy.
+- Very large video: resumable/multipart strategy with server-side finalization.
 
 ---
 
-## 3) Upload Flow (DigitalOcean Spaces)
+## 5) Media Folder Structure in Spaces
 
-1. **Client requests upload URL** via `POST /upload` with filename/type/size.
-2. **Backend generates presigned URL** using S3-compatible SDK against DigitalOcean Spaces bucket.
-3. **Client uploads directly to Spaces** using returned URL and headers.
-4. **Backend stores metadata** in `media_files` (initially pending, then confirmed).
+Required top-level structure:
+- `/videos`
+- `/images`
+- `/documents`
+- `/thumbnails`
 
-### Practical completion handling
-Two common patterns (can be combined):
-- **Client finalize call**: client calls a `POST /upload/complete` style endpoint with `mediaId` after successful PUT.
-- **Async verifier/worker**: backend validates object existence (HEAD request), extracts metadata, and marks as `ready`.
+Recommended production key structure:
 
-For this design, `POST /create-post` must reject media not yet marked `ready`.
+```text
+/videos/{userId}/{yyyy}/{mm}/{mediaId}/{variant}
+/images/{userId}/{yyyy}/{mm}/{mediaId}.{ext}
+/documents/{userId}/{yyyy}/{mm}/{mediaId}.{ext}
+/thumbnails/{userId}/{yyyy}/{mm}/{mediaId}_{size}.jpg
+```
 
----
+Optional processed/transcoded layout:
 
-## 4) Authentication Design
+```text
+/videos/{userId}/{yyyy}/{mm}/{mediaId}/source.mp4
+/videos/{userId}/{yyyy}/{mm}/{mediaId}/hls/master.m3u8
+/videos/{userId}/{yyyy}/{mm}/{mediaId}/hls/720p/segment_0001.ts
+/videos/{userId}/{yyyy}/{mm}/{mediaId}/hls/480p/segment_0001.ts
+```
 
-### 4.1 Auth Model
-- JWT access token (short TTL).
-- Refresh token rotation (longer TTL, server-tracked sessions).
-
-### 4.2 Protected Endpoints
-- Require auth: `POST /upload`, `POST /create-post`, personalized `GET /feed`.
-- Conditional auth: `GET /post/:id`, `GET /media/:id` (public content may be anonymous).
-
-### 4.3 Authorization Rules
-- Only media owner can attach a media item to new post.
-- Post/media visibility enforced at query time (`public/followers/private`).
-- Private media retrieval always uses signed URLs with short expiration.
-
----
-
-## 5) Upload Security Controls
-
-### 5.1 Input & Policy Validation
-- MIME whitelist by media type.
-- Max size enforcement before presign.
-- Filename sanitization and server-generated object keys.
-
-### 5.2 Presigned URL Hardening
-- Very short expiry window (e.g., 5–15 minutes).
-- Restrict method to PUT and expected content-type.
-- Optional checksum/content-md5 verification.
-
-### 5.3 Abuse Prevention
-- Per-user rate limits on `/upload`.
-- Daily upload quota enforcement.
-- Malware scanning pipeline for document types before `ready` state.
-
-### 5.4 Access Security
-- Private objects not publicly listed.
-- Download/stream for private assets only through authorized signed URL flow.
+Benefits:
+- Predictable retrieval paths.
+- Easy lifecycle cleanup by prefix.
+- Better operations observability and cost attribution by prefix/user/date.
 
 ---
 
-## 6) Media Metadata Storage
+## 6) Upload Process (End-to-End)
 
-Store normalized metadata in `media_files` so feed/post responses do not depend on live storage introspection.
+1. **Initiate**: frontend requests upload contract from backend.
+2. **Authorize**: backend checks auth, quota, mime, and max size.
+3. **Presign**: backend signs PUT (or multipart part URLs).
+4. **Transfer**: frontend uploads directly to Spaces.
+5. **Finalize**: frontend notifies backend or worker verifies object via `HEAD`.
+6. **Persist**: backend stores metadata (`object_key`, size, checksum, type).
+7. **Publish**: media can now be attached to a post and served in feed.
 
-Recommended fields:
-- Identity: `id`, `owner_user_id`, `post_id` (nullable until attached)
-- Storage: `bucket`, `region`, `object_key`, `cdn_url` (nullable)
-- Classification: `media_type`, `mime_type`, `file_ext`
-- Technical: `size_bytes`, `checksum`, `width`, `height`, `duration_seconds`, `page_count`
-- Lifecycle: `status` (`initiated|uploaded|processing|ready|failed|deleted`)
-- Audit: `created_at`, `updated_at`, `uploaded_at`
-
-Video-specific optional metadata:
-- `stream_manifest_key`
-- `transcode_profile`
-- `thumbnail_key`
-
-Document-specific optional metadata:
-- `preview_key`
-- `is_downloadable`
+Failure handling:
+- Upload failure: retry with same contract if valid; otherwise re-initiate.
+- Expired URL: request new presigned URL.
+- Partial multipart upload: abort incomplete multipart session via backend policy.
 
 ---
 
-## 7) Database Schema Design
+## 7) File Naming Strategy
 
-## 7.1 `users`
-Core identity table.
-- `id` (PK)
-- `username` (unique)
-- `email` (unique)
-- `password_hash`
-- `display_name`
-- `avatar_media_id` (nullable FK -> media_files.id)
-- `created_at`, `updated_at`
+## 7.1 Naming Principles
+- Never trust client filename for storage key identity.
+- Use server-generated identifiers (UUID/ULID).
+- Keep extension only for debugging and compatibility hints.
 
-## 7.2 `posts`
-Post container.
-- `id` (PK)
-- `author_user_id` (FK -> users.id)
-- `text_content` (nullable)
-- `visibility` (`public|followers|private`)
-- `status` (`published|hidden|deleted`)
-- `created_at`, `updated_at`
+## 7.2 Recommended Key Format
+`{category}/{userId}/{date}/{mediaId}_{hash}.{ext}`
 
-## 7.3 `media_files`
-Uploaded asset table.
-- `id` (PK)
-- `owner_user_id` (FK -> users.id)
-- `post_id` (nullable FK -> posts.id)
-- `media_type` (`image|video|document`)
-- `mime_type`
-- `object_key` (unique)
-- `cdn_url` (nullable)
-- `size_bytes`
-- `status`
-- `metadata_json` (optional extensibility)
-- `created_at`, `updated_at`
+Where:
+- `category` = videos/images/documents/thumbnails
+- `mediaId` = DB identifier (UUID)
+- `hash` = short checksum or random suffix (collision safety)
 
-## 7.4 `likes`
-User reactions on posts.
-- `id` (PK)
-- `user_id` (FK -> users.id)
-- `post_id` (FK -> posts.id)
-- `created_at`
-- Unique composite index: (`user_id`, `post_id`)
-
-## 7.5 `comments`
-Threaded post responses.
-- `id` (PK)
-- `post_id` (FK -> posts.id)
-- `user_id` (FK -> users.id)
-- `parent_comment_id` (nullable FK -> comments.id)
-- `body`
-- `status` (`active|hidden|deleted`)
-- `created_at`, `updated_at`
+## 7.3 Why This Works
+- Prevents collisions and path traversal abuse.
+- Makes ownership and audit tracing straightforward.
+- Supports immutable asset versioning (new upload => new key).
 
 ---
 
-## 8) Relationship Model
+## 8) Security Rules
 
-- **users 1:N posts**
-  - One user authors many posts.
-- **users 1:N media_files**
-  - One user uploads many media files.
-- **posts 1:N media_files**
-  - One post can attach many media assets.
-  - `media_files.post_id` nullable to support pre-post uploads.
-- **users N:M posts via likes**
-  - Modeled through `likes` join table.
-- **posts 1:N comments**
-  - One post has many comments.
-- **users 1:N comments**
-  - One user can create many comments.
-- **comments self-reference 1:N**
-  - Enables threaded replies through `parent_comment_id`.
+## 8.1 Upload Security
+- Validate MIME type + extension + size before presign.
+- Enforce per-user rate limits and daily quota.
+- Use short-lived presigned URLs only.
+- Restrict signed operation to exact object key and method.
 
----
+## 8.2 Data Access Security
+- Default posture: private bucket objects unless explicitly public.
+- Enforce authorization before returning signed download/stream URLs.
+- Use least-privilege access key scope for backend services.
 
-## 9) Retrieval & Response Design Notes
+## 8.3 Content Safety
+- Malware scanning for document uploads.
+- Optional image/video moderation pipeline before publish.
+- Mark flagged files with metadata state (`quarantined`, `blocked`).
 
-### 9.1 Feed Payload Shaping
-- Return lightweight media descriptors in feed (thumbnail, type, duration, doc icon data).
-- Defer heavy/full media URL generation to `GET /media/:id` when needed for protected assets.
-
-### 9.2 Caching Approach
-- Feed query caching by cursor/user in Redis (short TTL).
-- Public CDN URLs cacheable at edge for public media.
-- Signed URLs intentionally short-lived and generally non-cacheable.
-
-### 9.3 Consistency Rules
-- Post creation should be transactional (post + media attach).
-- Media status transitions should be idempotent.
-- Soft-delete posts/media to preserve referential integrity for likes/comments history.
+## 8.4 Operational Security
+- Rotate keys periodically.
+- Enable audit logging for upload/retrieval operations.
+- Alert on abnormal upload spikes or suspicious access patterns.
 
 ---
 
-## 10) End-to-End Backend Flow Summary
+## 9) Public vs Private Files
 
-1. Authenticated user requests upload contract (`POST /upload`).
-2. Backend validates policy and returns presigned Spaces URL.
-3. Client uploads directly to DigitalOcean Spaces.
-4. Backend marks media `ready` after verification.
-5. User creates post referencing ready media (`POST /create-post`).
-6. Consumers fetch feed (`GET /feed`) and post details (`GET /post/:id`).
-7. Clients request final media access (`GET /media/:id`) using policy-based public CDN or signed URL delivery.
+## 9.1 Public Files
+Typical for:
+- Public post thumbnails
+- Publicly visible images/videos/doc previews
 
-This backend design cleanly separates metadata/control-plane operations from object data-plane transfer, enabling secure uploads, scalable delivery, and maintainable domain relationships.
+Delivery:
+- Return stable CDN URL.
+- Cache aggressively with long `Cache-Control` + immutable keys.
+
+## 9.2 Private Files
+Typical for:
+- Followers-only/private post media
+- Sensitive documents
+- Original source files not intended for broad distribution
+
+Delivery:
+- Return short-lived presigned GET URL from backend after auth check.
+- Disable broad caching for signed/private responses.
+
+## 9.3 Hybrid Pattern
+- Public derived assets (thumbnails, lower-res variants).
+- Private originals protected behind signed URLs.
+
+This balances performance and access control.
+
+---
+
+## 10) Streaming Optimization
+
+## 10.1 Video Format Strategy
+- Store source file in `/videos/.../source.mp4`.
+- Produce HLS renditions (`master.m3u8` + segmented variants).
+- Serve adaptive bitrate profiles (1080p/720p/480p).
+
+## 10.2 Playback Behavior
+- Player requests HLS manifest.
+- Client fetches small segments incrementally.
+- Network-aware quality switching improves stability.
+
+## 10.3 Storage/Delivery Optimizations
+- Keep segment size balanced for startup vs overhead (e.g., 2–6s segments).
+- Generate and store poster/thumbnail for fast feed previews.
+- Use Range request compatibility for MP4 fallback playback.
+
+---
+
+## 11) CDN for Faster Streaming
+
+## 11.1 Why CDN Helps
+CDN moves content closer to users via edge caching, reducing:
+- Startup latency
+- Buffering events
+- Origin load on Spaces
+
+## 11.2 CDN Integration Model
+1. Attach CDN endpoint/custom domain to Spaces bucket.
+2. Backend returns CDN URLs for public media and HLS assets.
+3. Edge caches hot manifests/segments/images/doc previews.
+4. Misses fall back to Spaces origin automatically.
+
+## 11.3 Cache Strategy
+- Manifests: shorter TTL (can change with encoding updates).
+- Segments/thumbnails: long TTL + immutable key versioning.
+- Invalidate only when necessary; prefer versioned keys over purge-heavy workflows.
+
+## 11.4 Private Streaming with CDN
+Options:
+- Signed origin URLs (backend presigned links), or
+- Tokenized CDN access layer (if supported by chosen edge setup).
+
+Recommended baseline:
+- Public videos via CDN URLs.
+- Private videos via short-lived signed URLs, optionally fronted by restricted CDN strategy.
+
+---
+
+## 12) Integration Checklist
+
+- [ ] Create and store Spaces API keys securely.
+- [ ] Provision bucket(s) and configure CORS.
+- [ ] Implement backend presign endpoint logic.
+- [ ] Enforce upload policies (type, size, quota, rate limit).
+- [ ] Persist metadata for each upload and finalize object readiness.
+- [ ] Define key prefixes: `/videos`, `/images`, `/documents`, `/thumbnails`.
+- [ ] Configure CDN endpoint/domain for public delivery.
+- [ ] Implement public vs private retrieval policy.
+- [ ] Add monitoring, logging, alerting, and key rotation procedures.
+
+This architecture gives a secure, scalable Spaces integration with efficient direct uploads and CDN-accelerated streaming delivery.
