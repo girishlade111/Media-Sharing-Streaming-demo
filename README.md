@@ -366,3 +366,7 @@ Contributions are welcome! Please open an issue or submit a PR.
 ---
 
 Built with ❤️ using DigitalOcean Spaces
+
+---
+
+Built by [Girish Lade](https://ladestack.in) — see more projects at [ladestack.in](https://ladestack.in).
